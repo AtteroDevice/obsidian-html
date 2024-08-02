@@ -80,9 +80,10 @@ class GetFileListModule(ObsidianHtmlModule):
         return found_files
 
     def run(self):
-        # get paths
+        # load config
         cfg = self.modfile("config.yml", allow_absent=True).read(sneak=True).from_yaml()
         excludes = cfg["exclude_glob"]
+        # get paths
         paths = self.modfile("paths.json").read().from_json()
         for key, value in paths.items():
             paths[key] = Path(value)
