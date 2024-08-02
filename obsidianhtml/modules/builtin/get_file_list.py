@@ -1,14 +1,11 @@
 import os
-import yaml
-
 from pathlib import Path
 
-from ...lib import pushd, WriteFileLog
+import yaml
 
-from ...core.NetworkTree import NetworkTree
 from ...core.FileObject import FileObject
-
-
+from ...core.NetworkTree import NetworkTree
+from ...lib import WriteFileLog, pushd
 from ..base_classes import ObsidianHtmlModule
 
 
@@ -68,9 +65,13 @@ class GetFileListModule(ObsidianHtmlModule):
             # in this case we use glob instead of rglob
             if glob_line[0] == "/":
                 glob_line = glob_line[1:]
-                found_files = found_files + [x.as_posix() for x in folder.glob(glob_line)]
+                found_files = found_files + [x.as_posix() for x in folder.glob(str(Path(glob_line) / "**/*"))]
             else:
-                found_files = found_files + [x.as_posix() for x in folder.rglob(glob_line)]
+                if glob_line == "*":
+                    glob_str = glob_line
+                else:
+                    glob_str = str(Path(glob_line) / "**/*")
+                found_files = found_files + [x.as_posix() for x in folder.rglob(glob_str)]
 
         # make unique & sort
         found_files = list(set(found_files))
@@ -80,6 +81,8 @@ class GetFileListModule(ObsidianHtmlModule):
 
     def run(self):
         # get paths
+        cfg = self.modfile("config.yml", allow_absent=True).read(sneak=True).from_yaml()
+        excludes = cfg["exclude_glob"]
         paths = self.modfile("paths.json").read().from_json()
         for key, value in paths.items():
             paths[key] = Path(value)
@@ -88,7 +91,8 @@ class GetFileListModule(ObsidianHtmlModule):
         included_files = self.glob_find(paths["input_folder"], self.value_of("include_glob"))
 
         # get all excluded files
-        excluded_files = self.glob_find(paths["input_folder"], self.value_of("exclude_glob"))
+        # excluded_files = self.glob_find(paths["input_folder"], self.value_of("exclude_glob"))
+        excluded_files = self.glob_find(paths["input_folder"], excludes)
 
         # get all included files minus excluded files
         selected_files = [x for x in included_files if x not in excluded_files]
@@ -99,7 +103,10 @@ class GetFileListModule(ObsidianHtmlModule):
 
         # check that the entrypoint file is not being filtered out
         if paths["entrypoint"].as_posix() not in selected_files:
-            self.print("ERROR", f'You have configured {self.nametag} to filter out {paths["entrypoint"]}, which is your entrypoint. Correct this and run again.')
+            self.print(
+                "ERROR",
+                f'You have configured {self.nametag} to filter out {paths["entrypoint"]}, which is your entrypoint. Correct this and run again.',
+            )
             exit(1)
 
         self.modfile("index/excluded_files.json", excluded_files).to_json().write()
